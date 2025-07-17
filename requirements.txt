@@ -1,0 +1,19 @@
+# FastAPI and Server
+fastapi==0.115.12
+uvicorn[standard]==0.34.1
+python-multipart
+
+# STT Engine
+faster-whisper==1.1.1
+ctranslate2==4.6.0
+
+# Configuration & Data Validation
+pydantic==2.11.3
+pydantic-settings
+
+# Async & WebSockets
+websockets==15.0.1
+anyio==4.9.0
+
+# Utilities
+python-dotenv==1.1.0

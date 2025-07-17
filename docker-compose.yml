@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  stt-service:
+    image: faster-whisper-stt-service-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faster_whisper_stt_service_container
+    # The .env file is automatically read by docker-compose
+    env_file:
+      - .env
+
+    # This sets up the port mapping from your .env file
+    ports:
+      - "${STT_SERVICE_PORT_HOST}:${STT_SERVICE_PORT_CONTAINER}"
+
+    # This sets up the volume mounts from your .env file
+    volumes:
+      # Mounts HOST_PATH:CONTAINER_PATH
+      # The container paths are fixed. The host paths are configured from .env.
+      # The "?err..." syntax will cause docker-compose to fail if the variables are not set in the .env file.
+      - "${STT_AUDIO_INBOX_PATH:?Error: STT_AUDIO_INBOX_PATH is not set in the .env file. Please define it.}:/stt_app_data/audio_inbox"
+      - "${STT_MODEL_CACHE_PATH:?Error: STT_MODEL_CACHE_PATH is not set in the .env file. Please define it.}:/stt_app_data/model_cache"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL}
+      - CLEANUP_AUDIO=${CLEANUP_AUDIO}
+      - PORT=${STT_SERVICE_PORT_CONTAINER}
+
+    # This is the direct equivalent of --gpus all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
