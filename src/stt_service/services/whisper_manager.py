@@ -116,7 +116,14 @@ class WhisperManager:
                 transcribe_args = self._prepare_transcription_args(params)
                 segments_iter, info_obj = self.model.transcribe(audio=audio_input, **transcribe_args)
 
-            info_data = info_obj.__dict__
+            info_data = {
+                "language": info_obj.language,
+                "language_probability": info_obj.language_probability,
+                "duration": info_obj.duration,
+                "duration_after_vad": info_obj.duration_after_vad,
+                "all_language_probs": info_obj.all_language_probs,
+                "vad_options": info_obj.vad_options.__dict__ if info_obj.vad_options else None
+            }
             yield json.dumps({"type": "info", "data": info_data}) + "\n"
 
             for segment in segments_iter:
