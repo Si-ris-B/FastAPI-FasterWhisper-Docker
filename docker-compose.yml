@@ -6,6 +6,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # --- THIS BLOCK IS NEW ---
+      # Pass build-time arguments from the .env file to the Dockerfile.
+      # This is how we pass your User ID and Group ID into the build process.
+      args:
+        UID: ${UID}
+        GID: ${GID}
+
     container_name: faster_whisper_stt_service_container
     # The .env file is automatically read by docker-compose
     env_file:
@@ -35,3 +42,4 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    restart: unless-stopped

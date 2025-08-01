@@ -1,12 +1,6 @@
 # Stage 1: Python base (for building wheels, doesn't need CUDA)
 FROM python:3.10-slim AS python-builder-base
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PIP_DEFAULT_TIMEOUT=100
-
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=off PIP_DISABLE_PIP_VERSION_CHECK=on PIP_DEFAULT_TIMEOUT=100
 WORKDIR /app_build
 RUN pip install --upgrade pip wheel setuptools
 COPY requirements.txt .
@@ -44,9 +38,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Create a non-root user to run the application
-RUN addgroup --system --gid 1001 appgroup \
-    && adduser --system --uid 1001 --ingroup appgroup appuser
+# --- DYNAMIC USER CREATION (THE FIX) ---
+# Accept User and Group IDs as build arguments with a safe default.
+ARG UID=1001
+ARG GID=1001
+
+# Create a group and user with the provided IDs. This user will now match the host user.
+RUN addgroup --system --gid ${GID} appgroup && \
+    adduser --system --uid ${UID} --ingroup appgroup appuser
 
 # Install dependencies from wheels
 COPY --from=python-builder-base /app_build/wheels /wheels
@@ -55,16 +54,16 @@ RUN pip3 install --no-cache-dir --no-index --find-links=/wheels -r /app/requirem
     pip3 install --no-cache-dir nvidia-cublas-cu12 nvidia-cudnn-cu12 && \
     rm -rf /wheels /app/requirements.txt
 
-# Copy application code and scripts
+# Copy application code and scripts, ensuring ownership is correct
 COPY --chown=appuser:appgroup src /app/src
 COPY --chown=appuser:appgroup scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Create the FIXED internal directories that will be used for volume mounts.
-RUN mkdir -p /stt_app_data/audio_inbox && chown -R appuser:appgroup /stt_app_data/audio_inbox \
-    && mkdir -p /stt_app_data/model_cache && chown -R appuser:appgroup /stt_app_data/model_cache
+# Create the FIXED internal directories that will be used for volume mounts
+RUN mkdir -p /stt_app_data/audio_inbox && chown -R appuser:appgroup /stt_app_data/audio_inbox && \
+    mkdir -p /stt_app_data/model_cache && chown -R appuser:appgroup /stt_app_data/model_cache
 
-# Switch to the non-root user
+# Switch to the newly created non-root user
 USER appuser
 
 EXPOSE ${PORT}
