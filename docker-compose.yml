@@ -1,40 +1,31 @@
-version: '3.8'
-
 services:
   stt-service:
-    image: faster-whisper-stt-service-api:latest
+    image: faster-whisper-stt-service-api:4.0.0
     build:
       context: .
       dockerfile: Dockerfile
-      # --- THIS BLOCK IS NEW ---
-      # Pass build-time arguments from the .env file to the Dockerfile.
-      # This is how we pass your User ID and Group ID into the build process.
       args:
-        UID: ${UID}
-        GID: ${GID}
+        UID: ${UID:-1001}
+        GID: ${GID:-1001}
 
-    container_name: faster_whisper_stt_service_container
-    # The .env file is automatically read by docker-compose
+    container_name: faster_whisper_stt_service
+
     env_file:
       - .env
 
-    # This sets up the port mapping from your .env file
     ports:
-      - "${STT_SERVICE_PORT_HOST}:${STT_SERVICE_PORT_CONTAINER}"
+      - "${STT_SERVICE_PORT_HOST:-8088}:${STT_SERVICE_PORT_CONTAINER:-8001}"
 
-    # This sets up the volume mounts from your .env file
     volumes:
-      # Mounts HOST_PATH:CONTAINER_PATH
-      # The container paths are fixed. The host paths are configured from .env.
-      # The "?err..." syntax will cause docker-compose to fail if the variables are not set in the .env file.
-      - "${STT_AUDIO_INBOX_PATH:?Error: STT_AUDIO_INBOX_PATH is not set in the .env file. Please define it.}:/stt_app_data/audio_inbox"
-      - "${STT_MODEL_CACHE_PATH:?Error: STT_MODEL_CACHE_PATH is not set in the .env file. Please define it.}:/stt_app_data/model_cache"
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL}
-      - CLEANUP_AUDIO=${CLEANUP_AUDIO}
-      - PORT=${STT_SERVICE_PORT_CONTAINER}
+      - "${STT_AUDIO_INBOX_PATH:?Error: STT_AUDIO_INBOX_PATH must be set in .env}:/stt_app_data/audio_inbox"
+      - "${STT_MODEL_CACHE_PATH:?Error: STT_MODEL_CACHE_PATH must be set in .env}:/stt_app_data/model_cache"
 
-    # This is the direct equivalent of --gpus all
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CLEANUP_AUDIO=${CLEANUP_AUDIO:-True}
+      - PORT=${STT_SERVICE_PORT_CONTAINER:-8001}
+
+    # GPU support (requires NVIDIA Container Toolkit)
     deploy:
       resources:
         reservations:
@@ -43,3 +34,11 @@ services:
               count: all
               capabilities: [gpu]
     restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${STT_SERVICE_PORT_CONTAINER:-8001}/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
