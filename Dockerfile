@@ -1,71 +1,90 @@
-# Stage 1: Python base (for building wheels, doesn't need CUDA)
-FROM python:3.10-slim AS python-builder-base
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=off PIP_DISABLE_PIP_VERSION_CHECK=on PIP_DEFAULT_TIMEOUT=100
-WORKDIR /app_build
-RUN pip install --upgrade pip wheel setuptools
-COPY requirements.txt .
-# Build wheels for all dependencies
-RUN pip wheel --no-cache-dir --wheel-dir /app_build/wheels -r requirements.txt
+# ============================================================
+# Stage 1: Build wheels in a slim Python image
+# ============================================================
+FROM python:3.11-slim AS python-builder
 
-
-# Stage 2: Final application image using NVIDIA CUDA base
-FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04 AS production
-
-# Set Python-related ENV VARS again for this stage
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100
 
-# Application-specific ENV VARS (defaults, can be overridden)
+WORKDIR /build
+
+RUN pip install --upgrade pip wheel setuptools
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+
+
+# ============================================================
+# Stage 2: Production image — CUDA 12.x + cuDNN 9 (required for turbo)
+# ============================================================
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS production
+
+LABEL org.opencontainers.image.title="FastAPI Faster-Whisper STT Service"
+LABEL org.opencontainers.image.description="Production STT service with turbo, batched, and live transcription"
+LABEL org.opencontainers.image.version="4.0.0"
+
+# Python env
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100 \
+    PYTHONPATH=/app
+
+# Application defaults (overridden by docker-compose env_file)
 ENV LOG_LEVEL="INFO" \
     CLEANUP_AUDIO="True" \
     HOST="0.0.0.0" \
     PORT="8001"
 
-# Add python path for src layout
-ENV PYTHONPATH=/app
-
-# Install Python3, pip, and essential tools into the NVIDIA image.
+# System packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
+    python3.11 \
+    python3.11-dev \
     python3-pip \
-    python3-dev \
     build-essential \
     ffmpeg \
+    libsndfile1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Make python3.11 the default python
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
 WORKDIR /app
 
-# --- DYNAMIC USER CREATION (THE FIX) ---
-# Accept User and Group IDs as build arguments with a safe default.
+# --- Dynamic UID/GID (avoids volume permission issues) ---
 ARG UID=1001
 ARG GID=1001
 
-# Create a group and user with the provided IDs. This user will now match the host user.
 RUN addgroup --system --gid ${GID} appgroup && \
-    adduser --system --uid ${UID} --ingroup appgroup appuser
+    adduser  --system --uid ${UID} --ingroup appgroup --no-create-home appuser
 
-# Install dependencies from wheels
-COPY --from=python-builder-base /app_build/wheels /wheels
-COPY requirements.txt /app/requirements.txt
-RUN pip3 install --no-cache-dir --no-index --find-links=/wheels -r /app/requirements.txt && \
+# Install Python dependencies from wheels
+COPY --from=python-builder /build/wheels /wheels
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir --no-index --find-links=/wheels -r /tmp/requirements.txt && \
     pip3 install --no-cache-dir nvidia-cublas-cu12 nvidia-cudnn-cu12 && \
-    rm -rf /wheels /app/requirements.txt
+    rm -rf /wheels /tmp/requirements.txt
 
-# Copy application code and scripts, ensuring ownership is correct
+# Copy application code
 COPY --chown=appuser:appgroup src /app/src
 COPY --chown=appuser:appgroup scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Create the FIXED internal directories that will be used for volume mounts
-RUN mkdir -p /stt_app_data/audio_inbox && chown -R appuser:appgroup /stt_app_data/audio_inbox && \
-    mkdir -p /stt_app_data/model_cache && chown -R appuser:appgroup /stt_app_data/model_cache
+# Persistent data directories (populated via volume mounts)
+RUN mkdir -p /stt_app_data/audio_inbox /stt_app_data/model_cache && \
+    chown -R appuser:appgroup /stt_app_data
 
-# Switch to the newly created non-root user
 USER appuser
 
 EXPOSE ${PORT}
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/status || exit 1
+
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD []
