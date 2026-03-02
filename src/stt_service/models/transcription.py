@@ -122,10 +122,10 @@ class StandardTranscriptionParams(BaseModel):
     max_initial_timestamp: float = Field(1.0, description="Max timestamp for first token.")
     word_timestamps: bool = Field(False, description="Enable word-level timestamps.")
     prepend_punctuations: str = Field(
-        "\"'"¿([{-", description="Punctuation attached to preceding word."
+        """\"'"¿([{-""", description="Punctuation attached to preceding word."
     )
     append_punctuations: str = Field(
-        "\"'.。,，!！?？:：")]}、", description="Punctuation attached to following word."
+        """\"'.。,，!！?？:：")]}、""", description="Punctuation attached to following word."
     )
     vad_filter: bool = Field(False, description="Enable Silero VAD pre-filter.")
     vad_parameters: Optional[VADParams] = Field(None, description="VAD tuning parameters.")
@@ -172,8 +172,8 @@ class BatchedTranscriptionParams(BaseModel):
         True, description="Timestamps are omitted by default in batch mode."
     )
     word_timestamps: bool = False
-    prepend_punctuations: str = "\"'"¿([{-"
-    append_punctuations: str = "\"'.。,，!！?？:：")]}、"
+    prepend_punctuations: str = """\"'"¿([{-"""
+    append_punctuations: str = """\"'.。,，!！?？:：")]}、"""
     vad_filter: bool = Field(True, description="VAD is strongly recommended for batch mode.")
     vad_parameters: Optional[BatchedVADParams] = None
     max_new_tokens: Optional[int] = None

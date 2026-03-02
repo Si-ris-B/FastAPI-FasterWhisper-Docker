@@ -90,13 +90,13 @@ class WebSocketLogHandler(logging.Handler):
 
 async def _broadcast_log(message: str):
     """Send a log message to all connected WebSocket clients."""
-        if not log_websockets:
-            return
+    if not log_websockets:
+        return
     disconnected = set()
     tasks = {client: client.send_text(message) for client in list(log_websockets)}
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
     for client, result in zip(tasks.keys(), results):
-            if isinstance(result, Exception):
+        if isinstance(result, Exception):
             disconnected.add(client)
     for client in disconnected:
         log_websockets.discard(client)

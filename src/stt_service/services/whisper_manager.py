@@ -161,15 +161,15 @@ class WhisperManager:
         return args
         
     def _resolve_suppress_tokens(self, args: Dict, params) -> Dict:
-            try:
-                from faster_whisper.tokenizer import Tokenizer
+        try:
+            from faster_whisper.tokenizer import Tokenizer
             tokenizer = Tokenizer(
-                self.model.hf_tokenizer,
-                self.model.model.is_multilingual,
-                task=getattr(params, "task", "transcribe"),
-                language=getattr(params, "language", None),
+            self.model.hf_tokenizer,
+            self.model.model.is_multilingual,
+            task=getattr(params, "task", "transcribe"),
+            language=getattr(params, "language", None),
             )
-                non_speech = list(tokenizer.non_speech_tokens)
+            non_speech = list(tokenizer.non_speech_tokens)
             user_tokens = [t for t in args["suppress_tokens"] if t >= 0]
             args["suppress_tokens"] = sorted(set(user_tokens + non_speech))
         except Exception as exc:
@@ -269,6 +269,7 @@ class WhisperManager:
                     f"[{segment.start:.2f}→{segment.end:.2f}] {segment.text[:60]}"
                 )
                 yield json.dumps({"type": "segment", "data": seg_data}) + "\n"
+                await asyncio.sleep(0)  # Yields the event loop so WebSockets can fire!
 
             elapsed = time.perf_counter() - t0
             rtf = elapsed / max(duration_s, 0.001)
@@ -385,6 +386,7 @@ class WhisperManager:
                     f"[{segment.start:.2f}→{segment.end:.2f}] {segment.text[:60]}"
                 )
                 yield json.dumps({"type": "segment", "data": seg_data}) + "\n"
+                await asyncio.sleep(0)  # Yields the event loop so WebSockets can fire!
 
             elapsed = time.perf_counter() - t0
             rtf = elapsed / max(duration_s, 0.001)
